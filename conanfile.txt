@@ -1,0 +1,11 @@
+[requires]
+boost/1.69.0@conan/stable
+gtest/1.8.1
+# qt/5.15.0@bincrafters/stable
+cmake_findboost_modular/1.69.0@bincrafters/stable
+
+[generators]
+cmake_paths
+
+[options]
+boost:shared=True

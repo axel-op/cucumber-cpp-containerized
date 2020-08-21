@@ -1,0 +1,43 @@
+FROM mcr.microsoft.com/windows:2004
+
+WORKDIR c:/
+
+# Installing Chocolatey
+RUN powershell -command Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+
+# Installing C++ tools
+RUN choco install -y visualstudio2019buildtools visualstudio2019-workload-vctools
+
+# Installing other tools and utilities
+RUN choco install -y git conan ruby \
+    && choco install -y cmake --installargs '"ADD_CMAKE_TO_PATH=System"'
+
+# Installing Ruby Cucumber
+RUN gem update --system --no-document \
+    && gem install cucumber --no-document
+
+COPY ./conanfile.txt c:/conanfile.txt
+
+# Installing Cucumber-CPP dependencies
+RUN conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan \
+    && conan install .
+
+ENV CUCUMBER_CPP "C:\cucumber-cpp"
+
+ENV CMAKE_GENERATOR "Visual Studio 16 2019"
+
+# Installing Cucumber-CPP
+RUN git clone --branch fix-boost-1.70.0-build https://github.com/homespring/cucumber-cpp %CUCUMBER_CPP% \
+    && cd %CUCUMBER_CPP% \
+    && git submodule init && git submodule update \
+    && cmake -E make_directory build \
+    # && cmake -E chdir build cmake -DCUKE_ENABLE_EXAMPLES=on -DCMAKE_TOOLCHAIN_FILE='C:\conan_paths.cmake' -DBoost_USE_STATIC_LIBS=ON -DCMAKE_CXX_FLAGS=/DBOOST_AUTO_LINK_SYSTEM=1  .. \
+    && cmake -E chdir build cmake -DCUKE_ENABLE_EXAMPLES=off -DCMAKE_TOOLCHAIN_FILE='C:\conan_paths.cmake' -DCMAKE_CXX_FLAGS=/D_WIN32_WINNT=0x0A00 ..
+
+WORKDIR c:/cucumber-cpp/
+RUN cmake -Wno-error=deprecated -Wno-error=dev -Wno-dev --build build
+# RUN cmake --build build --target test
+RUN cmake -Wno-error=deprecated -Wno-error=dev -Wno-dev --install build
+RUN cmake --build build --target features
+
+COPY . c:/workspace
